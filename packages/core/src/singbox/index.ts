@@ -659,7 +659,10 @@ function convertListeners(config: ClashConfig, mixedPort: number, allowLan: bool
     {
       type: "tun",
       tag: "tun-in",
-      address: ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+      // SFA/Android is more reliable with the IPv4-only TUN baseline used by
+      // sing-box's official China-client example. Avoid advertising an IPv6
+      // TUN route unless the profile also guarantees a working IPv6 egress.
+      address: ["172.19.0.1/30"],
       auto_route: true,
       stack: "mixed",
     },
@@ -779,8 +782,11 @@ export function generateSingBoxConfig(options: GenerateOptions): SingBoxConfig {
       // Avoid the system/local resolver in TUN mode: on Android it can be
       // re-captured by VpnService and create a DNS loop. Use an explicit
       // direct UDP resolver instead; the modern typed DNS server dials
-      // directly by default in sing-box >= 1.12.
+      // directly by default in sing-box >= 1.12. Keep DNS/TUN IPv4-only to
+      // match sing-box's official China-client baseline and avoid broken AAAA
+      // paths on Android VPN profiles without guaranteed IPv6 egress.
       servers: [{ type: "udp", tag: "local", server: "223.5.5.5", server_port: 53 }],
+      strategy: "ipv4_only",
       final: "local",
     },
     inbounds: listenerConfig.inbounds,

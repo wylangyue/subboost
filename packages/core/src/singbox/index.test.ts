@@ -179,13 +179,14 @@ describe("sing-box generator", () => {
     const config = generateSingBoxConfig(makeOptions()) as any;
 
     expect(config.dns.servers).toEqual([{ type: "udp", tag: "local", server: "223.5.5.5", server_port: 53 }]);
+    expect(config.dns.strategy).toBe("ipv4_only");
     expect(config.route.auto_detect_interface).toBe(true);
     expect(config.inbounds[0]).toMatchObject({ type: "mixed", tag: "mixed-in", listen_port: 17897 });
     expect(config.inbounds[0]).not.toHaveProperty("sniff");
     expect(config.inbounds[1]).toMatchObject({
       type: "tun",
       tag: "tun-in",
-      address: ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+      address: ["172.19.0.1/30"],
       auto_route: true,
       stack: "mixed",
     });
