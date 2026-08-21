@@ -75,6 +75,7 @@ const representativeNodes: ParsedNode[] = [
     type: "hysteria",
     server: "127.0.0.1",
     port: 10005,
+    ports: "47000-48000",
     "auth-str": "password",
     up: "100 Mbps",
     down: "100 Mbps",
@@ -85,6 +86,7 @@ const representativeNodes: ParsedNode[] = [
     type: "hysteria2",
     server: "127.0.0.1",
     port: 10005,
+    ports: "443,47000-48000,48001:48002,70000-70001,bad",
     password: "password",
     sni: "example.com",
     obfs: "salamander",
@@ -192,6 +194,14 @@ describe("sing-box generator", () => {
         expect.objectContaining({ address: "127.0.0.2", port: 10011, persistent_keepalive_interval: 25 }),
       ],
     }));
+
+    const hysteria = config.outbounds.find((item: any) => item.tag === "Hysteria");
+    expect(hysteria).toMatchObject({ server_ports: ["47000:48000"] });
+    expect(hysteria).not.toHaveProperty("server_port");
+
+    const hysteria2 = config.outbounds.find((item: any) => item.tag === "Hysteria2");
+    expect(hysteria2).toMatchObject({ server_ports: ["443:443", "47000:48000", "48001:48002"] });
+    expect(hysteria2).not.toHaveProperty("server_port");
 
     expect(config.route.rule_set.length).toBeGreaterThan(0);
     for (const ruleSet of config.route.rule_set) {

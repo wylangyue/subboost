@@ -181,14 +181,35 @@ function addDialFields(outbound: RecordValue, node: RecordValue): RecordValue {
   });
 }
 
-function parseServerPorts(value: unknown): string[] | undefined {
-  if (Array.isArray(value)) {
-    const values = value.map(String).map((item) => item.trim()).filter(Boolean);
-    return values.length > 0 ? values : undefined;
-  }
-  const raw = stringValue(value);
+function normalizeServerPortSpec(value: unknown): string | undefined {
+  const raw = typeof value === "number" && Number.isInteger(value)
+    ? String(value)
+    : stringValue(value);
   if (!raw) return undefined;
-  const values = raw.split(",").map((item) => item.trim()).filter(Boolean);
+
+  const singlePort = /^(\d{1,5})$/.exec(raw);
+  if (singlePort) {
+    const port = Number(singlePort[1]);
+    return port >= 1 && port <= 65535 ? `${port}:${port}` : undefined;
+  }
+
+  const range = /^(\d{1,5})\s*[-:]\s*(\d{1,5})$/.exec(raw);
+  if (!range) return undefined;
+  const from = Number(range[1]);
+  const to = Number(range[2]);
+  if (from < 1 || to > 65535 || from > to) return undefined;
+
+  // Mihomo/Hysteria subscriptions commonly use `47000-48000`, while
+  // sing-box server_ports requires the `47000:48000` range form.
+  return from === to ? String(from) : `${from}:${to}`;
+}
+
+function parseServerPorts(value: unknown): string[] | undefined {
+  const rawItems = Array.isArray(value) ? value : [value];
+  const values = rawItems
+    .flatMap((item) => typeof item === "string" ? item.split(",") : [item])
+    .map(normalizeServerPortSpec)
+    .filter((item): item is string => Boolean(item));
   return values.length > 0 ? values : undefined;
 }
 
