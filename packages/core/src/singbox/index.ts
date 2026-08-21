@@ -776,13 +776,21 @@ export function generateSingBoxConfig(options: GenerateOptions): SingBoxConfig {
   return compact({
     log: { level: "info" },
     dns: {
-      servers: [{ type: "local", tag: "local" }],
+      // Avoid the system/local resolver in TUN mode: on Android it can be
+      // re-captured by VpnService and create a DNS loop. Use an explicit
+      // direct UDP resolver instead; the modern typed DNS server dials
+      // directly by default in sing-box >= 1.12.
+      servers: [{ type: "udp", tag: "local", server: "223.5.5.5", server_port: 53 }],
       final: "local",
     },
     inbounds: listenerConfig.inbounds,
     outbounds,
     ...(endpoints.length > 0 ? { endpoints } : {}),
     route: {
+      // SFA's Android VpnService needs platform interface detection so
+      // sing-box's own DNS/proxy sockets escape the VPN instead of being
+      // captured back into the TUN.
+      auto_detect_interface: true,
       default_domain_resolver: "local",
       rules: [...listenerConfig.rules, ...routeRules],
       rule_set: ruleSets,
