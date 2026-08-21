@@ -299,6 +299,15 @@ function convertNode(node: ParsedNode): ConvertedNode | null {
   if (type === "wireguard") return convertWireGuard(value);
   if (!server || !serverPort) return null;
 
+  // Mihomo's `fingerprint` pins the SHA-256 hash of the complete certificate.
+  // sing-box 1.13 can only pin the certificate public key (SPKI SHA-256), so
+  // copying the value would be incorrect and silently disabling verification
+  // would be unsafe. Reality does not rely on the normal certificate chain.
+  const certificateFingerprint = stringValue(value.fingerprint);
+  if (certificateFingerprint && value["skip-cert-verify"] !== true && !isRecord(value["reality-opts"])) {
+    return null;
+  }
+
   const common = { tag, server, server_port: serverPort };
 
   if (type === "ss") {
@@ -340,7 +349,8 @@ function convertNode(node: ParsedNode): ConvertedNode | null {
 
   if (type === "vless") {
     const uuid = stringValue(value.uuid);
-    if (!uuid) return null;
+    const encryption = stringValue(value.encryption);
+    if (!uuid || (encryption && encryption !== "none")) return null;
     const transport = convertTransport(value);
     if (transport === null) return null;
     return { outbound: addDialFields(compact({
@@ -564,6 +574,7 @@ function convertRuleSets(config: ClashConfig): RecordValue[] {
       tag,
       format: "binary",
       url,
+      download_detour: "DIRECT",
       update_interval: secondsToDuration(provider.interval, "1d"),
     });
   }
@@ -596,6 +607,7 @@ function addDynamicGeoRuleSet(
       tag,
       format: "binary",
       url: `https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/${kind}/${code}.srs`,
+      download_detour: "DIRECT",
       update_interval: "1d",
     });
   }
@@ -655,6 +667,12 @@ function convertListeners(config: ClashConfig, mixedPort: number, allowLan: bool
   const rules: RecordValue[] = [
     { inbound: "mixed-in", action: "sniff" },
     { inbound: "tun-in", action: "sniff" },
+    {
+      type: "logical",
+      mode: "or",
+      rules: [{ protocol: "dns" }, { port: 53 }],
+      action: "hijack-dns",
+    },
   ];
 
   const listeners = Array.isArray(config.listeners) ? config.listeners : [];

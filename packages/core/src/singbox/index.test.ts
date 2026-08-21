@@ -192,6 +192,12 @@ describe("sing-box generator", () => {
     expect(config.inbounds[1]).not.toHaveProperty("inet6_address");
     expect(config.route.rules).toContainEqual({ inbound: "mixed-in", action: "sniff" });
     expect(config.route.rules).toContainEqual({ inbound: "tun-in", action: "sniff" });
+    expect(config.route.rules).toContainEqual({
+      type: "logical",
+      mode: "or",
+      rules: [{ protocol: "dns" }, { port: 53 }],
+      action: "hijack-dns",
+    });
 
     const wireGuardOutbound = config.outbounds.find((item: any) => item.type === "wireguard");
     expect(wireGuardOutbound).toBeUndefined();
@@ -218,6 +224,7 @@ describe("sing-box generator", () => {
       expect(ruleSet.url).toMatch(/^https:\/\/raw\.githubusercontent\.com\/MetaCubeX\/meta-rules-dat\/sing\/geo\//);
       expect(ruleSet.url).not.toContain("/refs/heads/");
       expect(ruleSet.url).toMatch(/\.srs$/);
+      expect(ruleSet.download_detour).toBe("DIRECT");
     }
     expect(config.route.rule_set).toContainEqual(expect.objectContaining({
       tag: "cn-ip",
@@ -240,6 +247,25 @@ describe("sing-box generator", () => {
           network: "xhttp",
           "xhttp-opts": { path: "/" },
         }),
+        node({
+          name: "Unsupported VLESS Encryption",
+          type: "vless",
+          server: "127.0.0.1",
+          port: 10013,
+          uuid: "44444444-4444-4444-8444-444444444444",
+          tls: true,
+          encryption: "mlkem768x25519plus.native/example",
+        }),
+        node({
+          name: "Unsupported Certificate Fingerprint",
+          type: "hysteria2",
+          server: "127.0.0.1",
+          port: 10014,
+          password: "password",
+          sni: "example.com",
+          fingerprint: "AA:BB:CC",
+          "skip-cert-verify": false,
+        }),
       ],
     }) as any;
 
@@ -258,6 +284,8 @@ describe("sing-box generator", () => {
       "SSH",
     ]));
     expect(tags).not.toContain("Unsupported XHTTP");
+    expect(tags).not.toContain("Unsupported VLESS Encryption");
+    expect(tags).not.toContain("Unsupported Certificate Fingerprint");
     expect(config.endpoints.map((item: any) => item.tag)).toContain("WireGuard");
   });
 
@@ -273,9 +301,31 @@ describe("sing-box generator", () => {
       "xhttp-opts": { path: "/" },
     });
 
+    const unsupportedEncryption = node({
+      name: "Unsupported VLESS Encryption",
+      type: "vless",
+      server: "127.0.0.1",
+      port: 10013,
+      uuid: "44444444-4444-4444-8444-444444444444",
+      tls: true,
+      encryption: "mlkem768x25519plus.native/example",
+    });
+    const unsupportedFingerprint = node({
+      name: "Unsupported Certificate Fingerprint",
+      type: "hysteria2",
+      server: "127.0.0.1",
+      port: 10014,
+      password: "password",
+      sni: "example.com",
+      fingerprint: "AA:BB:CC",
+      "skip-cert-verify": false,
+    });
+
     expect(isSingBoxCompatibleNode(representativeNodes[0])).toBe(true);
     expect(isSingBoxCompatibleNode(unsupportedXhttp)).toBe(false);
-    expect(hasSingBoxCompatibleNodes([unsupportedXhttp])).toBe(false);
+    expect(isSingBoxCompatibleNode(unsupportedEncryption)).toBe(false);
+    expect(isSingBoxCompatibleNode(unsupportedFingerprint)).toBe(false);
+    expect(hasSingBoxCompatibleNodes([unsupportedXhttp, unsupportedEncryption, unsupportedFingerprint])).toBe(false);
     expect(hasSingBoxCompatibleNodes([unsupportedXhttp, representativeNodes[0]])).toBe(true);
   });
 
