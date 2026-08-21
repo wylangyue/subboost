@@ -520,6 +520,32 @@ function convertGroup(group: ProxyGroup, validTags: Set<string>, testUrl: string
 function singBoxRuleSetUrl(provider: RuleProvider): string | undefined {
   const url = stringValue(provider.url);
   if (!url) return undefined;
+
+  // MetaCubeX's Mihomo providers use the `meta` branch and `.mrs` files. For
+  // sing-box, normalize the official repository to GitHub's raw-content host,
+  // the `sing` branch and `.srs` files. Keeping `github.com/.../raw/...` here
+  // can yield HTTP 403 in sing-box clients even though browsers/curl may follow
+  // the URL successfully.
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const githubPath = /^\/MetaCubeX\/meta-rules-dat\/raw\/(?:refs\/heads\/)?(?:meta|sing)\/geo\/(.+?)\.(?:mrs|srs)$/i.exec(parsed.pathname);
+    const rawPath = /^\/MetaCubeX\/meta-rules-dat\/(?:refs\/heads\/)?(?:meta|sing)\/geo\/(.+?)\.(?:mrs|srs)$/i.exec(parsed.pathname);
+    const matchedPath = host === "github.com"
+      ? githubPath?.[1]
+      : host === "raw.githubusercontent.com"
+        ? rawPath?.[1]
+        : undefined;
+
+    if (matchedPath) {
+      return `https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/${matchedPath}.srs${parsed.search}`;
+    }
+  } catch {
+    return undefined;
+  }
+
+  // Preserve the existing best-effort convention for custom mirrors. They must
+  // actually expose corresponding sing-box `.srs` assets at the rewritten path.
   return url
     .replace(/\/raw\/refs\/heads\/meta\/geo\//, "/raw/refs/heads/sing/geo/")
     .replace(/\/raw\/meta\/geo\//, "/raw/sing/geo/")

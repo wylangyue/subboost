@@ -205,9 +205,14 @@ describe("sing-box generator", () => {
 
     expect(config.route.rule_set.length).toBeGreaterThan(0);
     for (const ruleSet of config.route.rule_set) {
-      expect(ruleSet.url).toContain("/sing/geo/");
+      expect(ruleSet.url).toMatch(/^https:\/\/raw\.githubusercontent\.com\/MetaCubeX\/meta-rules-dat\/sing\/geo\//);
+      expect(ruleSet.url).not.toContain("/refs/heads/");
       expect(ruleSet.url).toMatch(/\.srs$/);
     }
+    expect(config.route.rule_set).toContainEqual(expect.objectContaining({
+      tag: "cn-ip",
+      url: "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geoip/cn.srs",
+    }));
   });
 
   it("converts supported nodes and silently excludes transports sing-box cannot represent", () => {
