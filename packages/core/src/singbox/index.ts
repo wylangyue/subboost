@@ -642,8 +642,20 @@ function convertRule(
 
 function convertListeners(config: ClashConfig, mixedPort: number, allowLan: boolean): { inbounds: RecordValue[]; rules: RecordValue[] } {
   const listenAddress = allowLan ? "::" : "127.0.0.1";
-  const inbounds: RecordValue[] = [{ type: "mixed", tag: "mixed-in", listen: listenAddress, listen_port: mixedPort }];
-  const rules: RecordValue[] = [{ inbound: "mixed-in", action: "sniff" }];
+  const inbounds: RecordValue[] = [
+    { type: "mixed", tag: "mixed-in", listen: listenAddress, listen_port: mixedPort },
+    {
+      type: "tun",
+      tag: "tun-in",
+      address: ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+      auto_route: true,
+      stack: "mixed",
+    },
+  ];
+  const rules: RecordValue[] = [
+    { inbound: "mixed-in", action: "sniff" },
+    { inbound: "tun-in", action: "sniff" },
+  ];
 
   const listeners = Array.isArray(config.listeners) ? config.listeners : [];
   const usedPorts = new Set([mixedPort]);

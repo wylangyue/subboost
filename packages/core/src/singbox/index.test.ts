@@ -181,7 +181,17 @@ describe("sing-box generator", () => {
     expect(config.dns.servers).toEqual([{ type: "local", tag: "local" }]);
     expect(config.inbounds[0]).toMatchObject({ type: "mixed", tag: "mixed-in", listen_port: 17897 });
     expect(config.inbounds[0]).not.toHaveProperty("sniff");
+    expect(config.inbounds[1]).toMatchObject({
+      type: "tun",
+      tag: "tun-in",
+      address: ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+      auto_route: true,
+      stack: "mixed",
+    });
+    expect(config.inbounds[1]).not.toHaveProperty("inet4_address");
+    expect(config.inbounds[1]).not.toHaveProperty("inet6_address");
     expect(config.route.rules).toContainEqual({ inbound: "mixed-in", action: "sniff" });
+    expect(config.route.rules).toContainEqual({ inbound: "tun-in", action: "sniff" });
 
     const wireGuardOutbound = config.outbounds.find((item: any) => item.type === "wireguard");
     expect(wireGuardOutbound).toBeUndefined();
