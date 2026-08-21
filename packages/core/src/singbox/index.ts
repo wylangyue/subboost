@@ -775,19 +775,38 @@ export function generateSingBoxConfig(options: GenerateOptions): SingBoxConfig {
     ?? nodeOutbounds[0]?.tag
     ?? endpoints[0]?.tag
     ?? "DIRECT";
+  const cnDnsRuleSets = ["geolocation-cn", "cn"].filter((tag) => knownRuleSetTags.has(tag));
+  const dnsRules: RecordValue[] = [
+    // `.cn` is safe to resolve locally even when a custom template omits the
+    // standard MetaCubeX China rule-sets. Broader CN domains are covered by
+    // the rule-set rule below when those sets are present.
+    { domain_suffix: [".cn"], action: "route", server: "cn-dns" },
+    ...(cnDnsRuleSets.length > 0
+      ? [{ rule_set: cnDnsRuleSets, action: "route", server: "cn-dns" }]
+      : []),
+  ];
 
   return compact({
     log: { level: "info" },
     dns: {
-      // Avoid the system/local resolver in TUN mode: on Android it can be
-      // re-captured by VpnService and create a DNS loop. Use an explicit
-      // direct UDP resolver instead; the modern typed DNS server dials
-      // directly by default in sing-box >= 1.12. Keep DNS/TUN IPv4-only to
-      // match sing-box's official China-client baseline and avoid broken AAAA
-      // paths on Android VPN profiles without guaranteed IPv6 egress.
-      servers: [{ type: "udp", tag: "local", server: "223.5.5.5", server_port: 53 }],
+      // Keep Android TUN DNS IPv4-only. Resolve China domains directly for
+      // local CDN affinity, but send all other DNS through the selected proxy
+      // so GFW-poisoned local answers cannot break otherwise healthy nodes.
+      servers: [
+        { type: "udp", tag: "cn-dns", server: "223.5.5.5", server_port: 53 },
+        {
+          type: "https",
+          tag: "proxy-dns",
+          server: "1.1.1.1",
+          server_port: 443,
+          path: "/dns-query",
+          tls: { enabled: true, server_name: "cloudflare-dns.com" },
+          detour: fallbackFinal,
+        },
+      ],
+      rules: dnsRules,
       strategy: "ipv4_only",
-      final: "local",
+      final: "proxy-dns",
     },
     inbounds: listenerConfig.inbounds,
     outbounds,
@@ -797,7 +816,7 @@ export function generateSingBoxConfig(options: GenerateOptions): SingBoxConfig {
       // sing-box's own DNS/proxy sockets escape the VPN instead of being
       // captured back into the TUN.
       auto_detect_interface: true,
-      default_domain_resolver: "local",
+      default_domain_resolver: "cn-dns",
       rules: [...listenerConfig.rules, ...routeRules],
       rule_set: ruleSets,
       final: final && validPolicyTargets.has(final) ? final : fallbackFinal,

@@ -178,8 +178,27 @@ describe("sing-box generator", () => {
     expect(SING_BOX_TARGET_VERSION).toBe("1.13");
     const config = generateSingBoxConfig(makeOptions()) as any;
 
-    expect(config.dns.servers).toEqual([{ type: "udp", tag: "local", server: "223.5.5.5", server_port: 53 }]);
+    expect(config.dns.servers).toEqual([
+      { type: "udp", tag: "cn-dns", server: "223.5.5.5", server_port: 53 },
+      {
+        type: "https",
+        tag: "proxy-dns",
+        server: "1.1.1.1",
+        server_port: 443,
+        path: "/dns-query",
+        tls: { enabled: true, server_name: "cloudflare-dns.com" },
+        detour: expect.any(String),
+      },
+    ]);
+    expect(config.dns.rules).toContainEqual({ domain_suffix: [".cn"], action: "route", server: "cn-dns" });
+    expect(config.dns.rules).toContainEqual({
+      rule_set: expect.arrayContaining(["geolocation-cn", "cn"]),
+      action: "route",
+      server: "cn-dns",
+    });
+    expect(config.dns.final).toBe("proxy-dns");
     expect(config.dns.strategy).toBe("ipv4_only");
+    expect(config.route.default_domain_resolver).toBe("cn-dns");
     expect(config.route.auto_detect_interface).toBe(true);
     expect(config.inbounds[0]).toMatchObject({ type: "mixed", tag: "mixed-in", listen_port: 17897 });
     expect(config.inbounds[0]).not.toHaveProperty("sniff");
