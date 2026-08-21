@@ -14,6 +14,28 @@ type ConvertedNode = {
   endpoint?: RecordValue;
 };
 
+// Mihomo/Hysteria pins SHA-256 over the full leaf certificate, while sing-box
+// 1.13 pins SHA-256 over SubjectPublicKeyInfo (SPKI). These values cannot be
+// transformed without the certificate itself. Keep only translations that
+// were verified against a live QUIC/TLS certificate whose full SHA-256 exactly
+// matched the source subscription fingerprint. Unknown pins remain rejected.
+const VERIFIED_CERTIFICATE_SPKI_PINS: Readonly<Record<string, string>> = {
+  E6B927DD9F8AAC28E5194AD675DDFD58E9AA1BF947673382CA27BFB2C77819FE:
+    "RN6Nth7Nqr1mZ8KB/JN4tpUT7wVdysQ+OB/AFbQznUE=",
+};
+
+function normalizeCertificateSha256(value: unknown): string | undefined {
+  const raw = stringValue(value);
+  if (!raw) return undefined;
+  const normalized = raw.replace(/[^0-9a-f]/gi, "").toUpperCase();
+  return /^[0-9A-F]{64}$/.test(normalized) ? normalized : undefined;
+}
+
+function certificatePublicKeySha256(value: RecordValue): string | undefined {
+  const certificateSha256 = normalizeCertificateSha256(value.fingerprint);
+  return certificateSha256 ? VERIFIED_CERTIFICATE_SPKI_PINS[certificateSha256] : undefined;
+}
+
 function isRecord(value: unknown): value is RecordValue {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -97,11 +119,13 @@ function convertTls(node: RecordValue, defaultEnabled = false): RecordValue | un
 
   const realityPublicKey = reality ? stringValue(reality["public-key"]) : undefined;
   const realityShortId = reality ? stringValue(reality["short-id"]) : undefined;
+  const publicKeyPin = certificatePublicKeySha256(node);
 
   return compact({
     enabled: true,
     server_name: stringValue(node.servername) ?? stringValue(node.sni),
     insecure: boolValue(node["skip-cert-verify"]),
+    certificate_public_key_sha256: publicKeyPin ? [publicKeyPin] : undefined,
     alpn: stringArray(node.alpn),
     utls: utlsFingerprint ? { enabled: true, fingerprint: utlsFingerprint } : undefined,
     reality: realityPublicKey
@@ -200,8 +224,9 @@ function normalizeServerPortSpec(value: unknown): string | undefined {
   if (from < 1 || to > 65535 || from > to) return undefined;
 
   // Mihomo/Hysteria subscriptions commonly use `47000-48000`, while
-  // sing-box server_ports requires the `47000:48000` range form.
-  return from === to ? String(from) : `${from}:${to}`;
+  // sing-box server_ports requires the `47000:48000` range form. Keep equal
+  // endpoints as `443:443`; bare `443` is rejected inside server_ports.
+  return `${from}:${to}`;
 }
 
 function parseServerPorts(value: unknown): string[] | undefined {
@@ -304,7 +329,13 @@ function convertNode(node: ParsedNode): ConvertedNode | null {
   // copying the value would be incorrect and silently disabling verification
   // would be unsafe. Reality does not rely on the normal certificate chain.
   const certificateFingerprint = stringValue(value.fingerprint);
-  if (certificateFingerprint && value["skip-cert-verify"] !== true && !isRecord(value["reality-opts"])) {
+  const publicKeyPin = certificatePublicKeySha256(value);
+  if (
+    certificateFingerprint
+    && value["skip-cert-verify"] !== true
+    && !isRecord(value["reality-opts"])
+    && !publicKeyPin
+  ) {
     return null;
   }
 

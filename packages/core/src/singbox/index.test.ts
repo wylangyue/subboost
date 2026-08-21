@@ -86,7 +86,7 @@ const representativeNodes: ParsedNode[] = [
     type: "hysteria2",
     server: "127.0.0.1",
     port: 10005,
-    ports: "443,47000-48000,48001:48002,70000-70001,bad",
+    ports: "443,8443:8443,47000-48000,48001:48002,70000-70001,bad",
     password: "password",
     sni: "example.com",
     obfs: "salamander",
@@ -237,7 +237,7 @@ describe("sing-box generator", () => {
     expect(hysteria).not.toHaveProperty("server_port");
 
     const hysteria2 = config.outbounds.find((item: any) => item.tag === "Hysteria2");
-    expect(hysteria2).toMatchObject({ server_ports: ["443:443", "47000:48000", "48001:48002"] });
+    expect(hysteria2).toMatchObject({ server_ports: ["443:443", "8443:8443", "47000:48000", "48001:48002"] });
     expect(hysteria2).not.toHaveProperty("server_port");
 
     expect(config.route.rule_set.length).toBeGreaterThan(0);
@@ -287,6 +287,16 @@ describe("sing-box generator", () => {
           fingerprint: "AA:BB:CC",
           "skip-cert-verify": false,
         }),
+        node({
+          name: "Verified Certificate Fingerprint",
+          type: "hysteria2",
+          server: "127.0.0.1",
+          port: 10015,
+          password: "password",
+          sni: "example.com",
+          fingerprint: "E6:B9:27:DD:9F:8A:AC:28:E5:19:4A:D6:75:DD:FD:58:E9:AA:1B:F9:47:67:33:82:CA:27:BF:B2:C7:78:19:FE",
+          "skip-cert-verify": false,
+        }),
       ],
     }) as any;
 
@@ -307,6 +317,11 @@ describe("sing-box generator", () => {
     expect(tags).not.toContain("Unsupported XHTTP");
     expect(tags).not.toContain("Unsupported VLESS Encryption");
     expect(tags).not.toContain("Unsupported Certificate Fingerprint");
+    expect(tags).toContain("Verified Certificate Fingerprint");
+    expect(config.outbounds.find((item: any) => item.tag === "Verified Certificate Fingerprint")?.tls).toMatchObject({
+      insecure: false,
+      certificate_public_key_sha256: ["RN6Nth7Nqr1mZ8KB/JN4tpUT7wVdysQ+OB/AFbQznUE="],
+    });
     expect(config.endpoints.map((item: any) => item.tag)).toContain("WireGuard");
   });
 
@@ -341,12 +356,24 @@ describe("sing-box generator", () => {
       fingerprint: "AA:BB:CC",
       "skip-cert-verify": false,
     });
+    const verifiedFingerprint = node({
+      name: "Verified Certificate Fingerprint",
+      type: "hysteria2",
+      server: "127.0.0.1",
+      port: 10015,
+      password: "password",
+      sni: "example.com",
+      fingerprint: "E6B927DD9F8AAC28E5194AD675DDFD58E9AA1BF947673382CA27BFB2C77819FE",
+      "skip-cert-verify": false,
+    });
 
     expect(isSingBoxCompatibleNode(representativeNodes[0])).toBe(true);
     expect(isSingBoxCompatibleNode(unsupportedXhttp)).toBe(false);
     expect(isSingBoxCompatibleNode(unsupportedEncryption)).toBe(false);
     expect(isSingBoxCompatibleNode(unsupportedFingerprint)).toBe(false);
+    expect(isSingBoxCompatibleNode(verifiedFingerprint)).toBe(true);
     expect(hasSingBoxCompatibleNodes([unsupportedXhttp, unsupportedEncryption, unsupportedFingerprint])).toBe(false);
+    expect(hasSingBoxCompatibleNodes([unsupportedFingerprint, verifiedFingerprint])).toBe(true);
     expect(hasSingBoxCompatibleNodes([unsupportedXhttp, representativeNodes[0]])).toBe(true);
   });
 
