@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { generateClashYaml } from "@subboost/core/generator";
+import { generateSingBoxJson, hasSingBoxCompatibleNodes } from "@subboost/core/singbox";
 import { buildGenerateOptionsFromConfig, getEffectiveTestOptions } from "@subboost/core/subscription/config-utils";
 import { buildProxyProvidersFromConfig } from "@subboost/core/subscription/proxy-providers";
 import type { SubscriptionResponseInfo } from "@subboost/core/subscription/subscription-response-info";
@@ -60,6 +61,7 @@ export type SubscriptionSummary = {
   name: string;
   token: string;
   subscriptionUrl: string;
+  singBoxUrl?: string;
   nodeCount: number;
   sourceCount: number;
   yamlUrl: string;
@@ -97,6 +99,15 @@ export type GeneratedSubscriptionYaml = {
   isAdmin: boolean;
 };
 
+export type GeneratedSubscriptionJson = {
+  json: string;
+  name: string;
+  subscriptionInfo: SubscriptionResponseInfo;
+  cacheExpirySeconds: number;
+  autoUpdateIntervalSeconds: number | null;
+  isAdmin: boolean;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -111,6 +122,10 @@ function validateLocalSubscriptionNodes(value: unknown): ParsedNode[] {
 
 function buildLocalSubscriptionUrl(token: string): string {
   return `${getAppUrl()}/api/subscriptions/${token}/config.yaml`;
+}
+
+function buildLocalSingBoxUrl(token: string): string {
+  return `${getAppUrl()}/api/subscriptions/${token}/config.json`;
 }
 
 function buildLocalSubscriptionConfig(
@@ -163,27 +178,33 @@ export function readSubscriptionSecrets(row: SubscriptionRow) {
 export function formatSubscription(row: SubscriptionRow): SubscriptionSummary {
   const secrets = readSubscriptionSecrets(row);
   const subscriptionUrl = buildLocalSubscriptionUrl(row.token);
-  return serializeSubscriptionSummaryData(row, secrets, {
-    subscriptionUrl,
-    yamlUrl: subscriptionUrl,
-    dateMode: "iso",
-    includeCounts: true,
-    includeFailureSourceState: false,
-    includeLastAttemptedAt: true,
-  }) as SubscriptionSummary;
+  return {
+    ...(serializeSubscriptionSummaryData(row, secrets, {
+      subscriptionUrl,
+      yamlUrl: subscriptionUrl,
+      dateMode: "iso",
+      includeCounts: true,
+      includeFailureSourceState: false,
+      includeLastAttemptedAt: true,
+    }) as Omit<SubscriptionSummary, "singBoxUrl">),
+    ...(hasSingBoxCompatibleNodes(secrets.nodes) ? { singBoxUrl: buildLocalSingBoxUrl(row.token) } : {}),
+  };
 }
 
 export function formatSubscriptionDetail(row: SubscriptionRow): SubscriptionDetail {
   const secrets = readSubscriptionSecrets(row);
   const subscriptionUrl = buildLocalSubscriptionUrl(row.token);
-  return serializeSubscriptionDetailData(row, secrets, {
-    subscriptionUrl,
-    yamlUrl: subscriptionUrl,
-    dateMode: "iso",
-    includeCounts: true,
-    includeFailureSourceState: false,
-    includeLastAttemptedAt: true,
-  }) as SubscriptionDetail;
+  return {
+    ...(serializeSubscriptionDetailData(row, secrets, {
+      subscriptionUrl,
+      yamlUrl: subscriptionUrl,
+      dateMode: "iso",
+      includeCounts: true,
+      includeFailureSourceState: false,
+      includeLastAttemptedAt: true,
+    }) as Omit<SubscriptionDetail, "singBoxUrl">),
+    ...(hasSingBoxCompatibleNodes(secrets.nodes) ? { singBoxUrl: buildLocalSingBoxUrl(row.token) } : {}),
+  };
 }
 
 export async function listSubscriptions(ownerId: string): Promise<SubscriptionSummary[]> {
@@ -453,6 +474,30 @@ export async function generateSubscriptionYaml(token: string): Promise<Generated
   await prisma.subscription.update({ where: { id: row.id }, data: { lastAccessedAt: new Date() } });
   return {
     yaml,
+    name: row.name,
+    subscriptionInfo: secrets.subscriptionInfo,
+    cacheExpirySeconds: CACHE_TTL_SECONDS,
+    autoUpdateIntervalSeconds: row.autoUpdateInterval,
+    isAdmin: true,
+  };
+}
+
+export async function generateSubscriptionSingBoxJson(token: string): Promise<GeneratedSubscriptionJson | null> {
+  const row = await prisma.subscription.findUnique({ where: { token }, include: { autoUpdateState: true } });
+  if (!row) return null;
+  const secrets = readSubscriptionSecrets(row);
+  // Mihomo proxy-providers have no sing-box equivalent. Provider-only subscriptions therefore
+  // cannot be represented without fetching and materializing their nodes first. Also avoid
+  // returning a syntactically valid but useless DIRECT-only profile when every node is unsupported.
+  if (!hasSingBoxCompatibleNodes(secrets.nodes)) return null;
+  const json = generateSingBoxJson(
+    buildGenerateOptionsFromConfig(secrets.config, {
+      nodes: secrets.nodes,
+    })
+  );
+  await prisma.subscription.update({ where: { id: row.id }, data: { lastAccessedAt: new Date() } });
+  return {
+    json,
     name: row.name,
     subscriptionInfo: secrets.subscriptionInfo,
     cacheExpirySeconds: CACHE_TTL_SECONDS,

@@ -589,6 +589,27 @@ function SubscriptionRow({
             </>
           )}
         </Button>
+        {sub.singBoxUrl && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void onCopy(sub.singBoxUrl as string, `${sub.id}:singbox`)}
+            className="gap-0 sm:gap-2"
+            title="复制 sing-box 订阅链接"
+          >
+            {copiedId === `${sub.id}:singbox` ? (
+              <>
+                <Check className="h-4 w-4 text-green-500" />
+                <span className="hidden sm:inline text-green-500">已复制</span>
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4" />
+                <span className="hidden sm:inline">sing-box</span>
+              </>
+            )}
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"

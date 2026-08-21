@@ -6,6 +6,7 @@ import {
   deleteSubscription,
   formatSubscription,
   formatSubscriptionDetail,
+  generateSubscriptionSingBoxJson,
   generateSubscriptionYaml,
   getSubscription,
   listSubscriptions,
@@ -16,6 +17,8 @@ import {
 
 const mocks = vi.hoisted(() => ({
   generateClashYaml: vi.fn(),
+  generateSingBoxJson: vi.fn(),
+  hasSingBoxCompatibleNodes: vi.fn(),
   buildGenerateOptionsFromConfig: vi.fn(),
   getEffectiveTestOptions: vi.fn(),
   buildProxyProvidersFromConfig: vi.fn(),
@@ -43,6 +46,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@subboost/core/generator", () => ({
   generateClashYaml: mocks.generateClashYaml,
+}));
+
+vi.mock("@subboost/core/singbox", () => ({
+  generateSingBoxJson: mocks.generateSingBoxJson,
+  hasSingBoxCompatibleNodes: mocks.hasSingBoxCompatibleNodes,
 }));
 
 vi.mock("@subboost/core/subscription/config-utils", () => ({
@@ -161,6 +169,8 @@ describe("local subscription service", () => {
     mocks.buildProxyProvidersFromConfig.mockReturnValue(null);
     mocks.buildGenerateOptionsFromConfig.mockReturnValue({ nodes: [node()] });
     mocks.generateClashYaml.mockReturnValue("mixed-port: 7890\n");
+    mocks.generateSingBoxJson.mockReturnValue('{"outbounds":[]}\n');
+    mocks.hasSingBoxCompatibleNodes.mockImplementation((nodes: unknown) => Array.isArray(nodes) && nodes.length > 0);
     mocks.prisma.subscription.findMany.mockResolvedValue([row()]);
     mocks.prisma.subscription.create.mockResolvedValue(row({ name: "Created" }));
     mocks.prisma.subscription.findFirst.mockResolvedValue(row());
@@ -191,6 +201,7 @@ describe("local subscription service", () => {
       id: "sub-1",
       name: "Saved",
       subscriptionUrl: "http://127.0.0.1:3001/api/subscriptions/token-1/config.yaml",
+      singBoxUrl: "http://127.0.0.1:3001/api/subscriptions/token-1/config.json",
       nodeCount: 1,
       sourceCount: 1,
       isPrimary: true,
@@ -210,6 +221,9 @@ describe("local subscription service", () => {
       config: expect.objectContaining({ smartNodeMatchingEnabled: false }),
       subscriptionInfo: { upload: 2048, total: 4096 },
     });
+
+    mocks.hasSingBoxCompatibleNodes.mockReturnValueOnce(false);
+    expect(formatSubscription(row())).not.toHaveProperty("singBoxUrl");
 
     expect(
       formatSubscription(
@@ -619,5 +633,31 @@ describe("local subscription service", () => {
     );
     mocks.buildProxyProvidersFromConfig.mockReturnValueOnce({ provider: { url: "https://example.com/provider.yaml" } });
     await expect(generateSubscriptionYaml("provider-only")).resolves.toMatchObject({ yaml: "mixed-port: 7890\n" });
+  });
+
+  it("generates sing-box JSON from materialized nodes and rejects provider-only snapshots", async () => {
+    await expect(generateSubscriptionSingBoxJson("token-1")).resolves.toMatchObject({
+      json: '{"outbounds":[]}\n',
+      name: "Saved",
+      subscriptionInfo: { upload: 2048, total: 4096 },
+      cacheExpirySeconds: 3600,
+      autoUpdateIntervalSeconds: 86400,
+      isAdmin: true,
+    });
+    expect(mocks.generateSingBoxJson).toHaveBeenCalledWith(expect.objectContaining({ nodes: [expect.objectContaining({ name: "Node" })] }));
+    expect(mocks.prisma.subscription.update).toHaveBeenCalledWith({
+      where: { id: "sub-1" },
+      data: { lastAccessedAt: expect.any(Date) },
+    });
+
+    mocks.prisma.subscription.findUnique.mockResolvedValueOnce(null);
+    await expect(generateSubscriptionSingBoxJson("missing")).resolves.toBeNull();
+
+    mocks.prisma.subscription.findUnique.mockResolvedValueOnce(
+      row({ encryptedNodes: JSON.stringify([]), encryptedConfig: JSON.stringify({ proxyProviders: { provider: {} } }) })
+    );
+    mocks.generateSingBoxJson.mockClear();
+    await expect(generateSubscriptionSingBoxJson("provider-only")).resolves.toBeNull();
+    expect(mocks.generateSingBoxJson).not.toHaveBeenCalled();
   });
 });
