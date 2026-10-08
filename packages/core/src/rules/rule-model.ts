@@ -19,6 +19,12 @@ function toTrimmedString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizePositiveInt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
 function trimLeadingSlashes(value: string): string {
   let index = 0;
   while (index < value.length && value.charCodeAt(index) === 47) index += 1;
@@ -169,6 +175,17 @@ function normalizeCustomProxyGroups(value: unknown): CustomProxyGroup[] {
             strategy: isLoadBalanceStrategy(rawGroup.strategy)
               ? rawGroup.strategy
               : DEFAULT_LOAD_BALANCE_STRATEGY,
+          }
+        : {}),
+      ...(groupType === "fallback" && normalizePositiveInt(rawGroup.timeout) !== undefined
+        ? { timeout: normalizePositiveInt(rawGroup.timeout) }
+        : {}),
+      ...(groupType === "fallback" &&
+      normalizePositiveInt(rawGroup.maxFailedTimes ?? rawGroup["max-failed-times"]) !== undefined
+        ? {
+            maxFailedTimes: normalizePositiveInt(
+              rawGroup.maxFailedTimes ?? rawGroup["max-failed-times"]
+            ),
           }
         : {}),
       advanced: normalizeProxyGroupAdvancedConfig(rawGroup.advanced),

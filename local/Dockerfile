@@ -2,7 +2,7 @@ FROM node:22-alpine AS deps
 WORKDIR /package
 RUN apk add --no-cache openssl
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 COPY packages/core packages/core
 COPY packages/server-core packages/server-core
 COPY packages/ui packages/ui

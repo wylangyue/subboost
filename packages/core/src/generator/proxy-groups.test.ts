@@ -96,6 +96,39 @@ describe("proxy group generator", () => {
     });
   });
 
+  it("emits custom fallback health-check thresholds", () => {
+    const groups = generateProxyGroups({
+      nodes: [node("Node A"), node("Node B")],
+      enabledModules: ["select", "auto"],
+      ruleProviderBaseUrl: "https://rules.example.com",
+      testUrl: "https://probe.example.com/204",
+      testInterval: 15,
+      customProxyGroups: [
+        {
+          ...customGroup("fallback-health", "fallback"),
+          timeout: 800,
+          maxFailedTimes: 1,
+          advanced: {
+            includeRegex: "^Node",
+            memberOrder: [
+              { kind: "node", name: "Node A" },
+              { kind: "node", name: "Node B" },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(groups.find((group) => group.name === "Custom fallback-health")).toMatchObject({
+      type: "fallback",
+      proxies: ["Node A", "Node B"],
+      url: "https://probe.example.com/204",
+      interval: 15,
+      timeout: 800,
+      "max-failed-times": 1,
+    });
+  });
+
   it("generates providers and template metadata helpers", () => {
     const providers = generateRuleProviders({
       nodes: [node("Node A")],

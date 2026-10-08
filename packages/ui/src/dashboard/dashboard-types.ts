@@ -17,6 +17,7 @@ export interface Subscription {
   name: string;
   token: string;
   subscriptionUrl: string;
+  singBoxUrl?: string;
   isPrimary: boolean;
   autoUpdateInterval: number | null;
   autoUpdateState: SubscriptionAutoUpdateState;

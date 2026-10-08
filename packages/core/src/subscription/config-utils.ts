@@ -65,6 +65,11 @@ function normalizePort(value: unknown): number | undefined {
   return n;
 }
 
+function normalizePositiveInt(value: unknown): number | undefined {
+  const n = normalizeNonNegativeInt(value);
+  return n !== null && n > 0 ? n : undefined;
+}
+
 function normalizeCustomRules(value: unknown): CustomRule[] | undefined {
   if (!Array.isArray(value)) return undefined;
 
@@ -235,6 +240,11 @@ function normalizeCustomProxyGroups(value: unknown): CustomProxyGroup[] {
     const memberSource = item.memberSource === "filtered-nodes" ? "filtered-nodes" : undefined;
     const includeInGroupMembers =
       typeof item.includeInGroupMembers === "boolean" ? item.includeInGroupMembers : undefined;
+    const timeout = groupType === "fallback" ? normalizePositiveInt(item.timeout) : undefined;
+    const maxFailedTimes =
+      groupType === "fallback"
+        ? normalizePositiveInt(item.maxFailedTimes ?? item["max-failed-times"])
+        : undefined;
     const advanced = normalizeProxyGroupAdvancedConfig(item.advanced);
     out.push({
       id,
@@ -246,6 +256,8 @@ function normalizeCustomProxyGroups(value: unknown): CustomProxyGroup[] {
       ...(includeInGroupMembers !== undefined ? { includeInGroupMembers } : {}),
       groupType,
       ...(strategy ? { strategy } : {}),
+      ...(timeout !== undefined ? { timeout } : {}),
+      ...(maxFailedTimes !== undefined ? { maxFailedTimes } : {}),
       ...(Object.keys(advanced).length > 0 ? { advanced } : {}),
     });
   }

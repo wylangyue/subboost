@@ -68,7 +68,14 @@ describe("rule model normalization", () => {
         },
         { id: "direct", name: "Direct", emoji: "", groupType: "direct-first" },
         { id: "reject", name: "Reject", emoji: "", groupType: "reject-first" },
-        { id: "fallback", name: "Fallback", emoji: "", groupType: "fallback" },
+        {
+          id: "fallback",
+          name: "Fallback",
+          emoji: "",
+          groupType: "fallback",
+          timeout: 800,
+          maxFailedTimes: 1,
+        },
         { id: "url", name: "URL", emoji: "", groupType: "url-test" },
       ],
       customRuleSets: [
@@ -97,6 +104,10 @@ describe("rule model normalization", () => {
     ]);
     expect(result.customProxyGroups.find((group) => group.id === "balance")).toMatchObject({
       strategy: "consistent-hashing",
+    });
+    expect(result.customProxyGroups.find((group) => group.id === "fallback")).toMatchObject({
+      timeout: 800,
+      maxFailedTimes: 1,
     });
     expect(result.customRuleSets).toEqual([
       {

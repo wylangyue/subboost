@@ -303,6 +303,10 @@ export interface CustomProxyGroup {
   includeInGroupMembers?: boolean;
   groupType: ProxyGroupGroupType;
   strategy?: LoadBalanceStrategy;
+  /** Health-check timeout in milliseconds for fallback groups. */
+  timeout?: number;
+  /** Consecutive failed health checks before fallback switches away. */
+  maxFailedTimes?: number;
   advanced?: ProxyGroupAdvancedConfig;
 }
 

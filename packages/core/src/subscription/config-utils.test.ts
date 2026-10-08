@@ -157,6 +157,50 @@ describe("subscription config utils", () => {
     expect(options.proxyGroupOrder).toEqual(["auto"]);
   });
 
+  it("normalizes fallback health-check thresholds and ignores them for other group types", () => {
+    const options = buildGenerateOptionsFromConfig(
+      {
+        customProxyGroups: [
+          {
+            id: "fallback",
+            name: "Fallback",
+            emoji: "",
+            groupType: "fallback",
+            timeout: 800,
+            maxFailedTimes: 1,
+          },
+          {
+            id: "select",
+            name: "Select",
+            emoji: "",
+            groupType: "select",
+            timeout: 900,
+            maxFailedTimes: 2,
+          },
+          {
+            id: "invalid",
+            name: "Invalid",
+            emoji: "",
+            groupType: "fallback",
+            timeout: 0,
+            "max-failed-times": -1,
+          },
+        ],
+      },
+      { nodes: [node()] }
+    );
+
+    expect(options.customProxyGroups?.[0]).toMatchObject({
+      id: "fallback",
+      timeout: 800,
+      maxFailedTimes: 1,
+    });
+    expect(options.customProxyGroups?.[1]).not.toHaveProperty("timeout");
+    expect(options.customProxyGroups?.[1]).not.toHaveProperty("maxFailedTimes");
+    expect(options.customProxyGroups?.[2]).not.toHaveProperty("timeout");
+    expect(options.customProxyGroups?.[2]).not.toHaveProperty("maxFailedTimes");
+  });
+
   it("generates from effective nodes while matching persisted original names", () => {
     const kept = node({ name: "Singapore", _originName: "SG Premium" });
     const excluded = node({ name: "Pinned Hong Kong", _originName: "HK IPLC" });

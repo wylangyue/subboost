@@ -13,7 +13,7 @@
 </div>
 <!-- markdownlint-enable MD033 MD041 -->
 
-**SubBoost** is a **Clash/Mihomo subscription conversion, enhancement, and management** tool. It can convert airport subscriptions and self-hosted nodes into optimized aggregate subscriptions, then update them automatically. With the visual UI, you can configure advanced features such as **chained proxies, precise routing, DNS leak prevention, and multi-subscription aggregation** in one click.
+**SubBoost** is a **proxy subscription conversion, enhancement, and management** tool with Mihomo YAML and sing-box JSON outputs. It can convert airport subscriptions and self-hosted nodes into optimized aggregate subscriptions, then update them automatically. With the visual UI, you can configure advanced features such as **chained proxies, precise routing, DNS leak prevention, and multi-subscription aggregation** in one click.
 
 ## Highlights & Use Cases
 
